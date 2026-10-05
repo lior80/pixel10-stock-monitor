@@ -27,6 +27,11 @@ jobs:
             python -m pip install playwright requests
             python -m playwright install --with-deps chromium
 
+      - name: Restore stock state
+        uses: actions/cache/restore@v4
+        with:
+          path: .stock-state
+          key: pixel10-stock-state
       - name: Check Best Buy
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -234,10 +239,41 @@ jobs:
               # Alert only when something looks available.
               # -------------------------------------------------
 
-              if purchase_available and not unavailable:
+                            # -------------------------------------------------
+              # Remember whether we already alerted.
+              # -------------------------------------------------
+
+              state_file = ".stock-state/available"
+
+              os.makedirs(".stock-state", exist_ok=True)
+
+              previously_available = (
+                  os.path.exists(state_file)
+              )
+
+              currently_available = (
+                  purchase_available and not unavailable
+              )
+
+              print(
+                  "Previously alerted:",
+                  previously_available
+              )
+
+              print(
+                  "Currently available:",
+                  currently_available
+              )
+
+              # -------------------------------------------------
+              # Alert ONLY when availability changes from
+              # unavailable -> available.
+              # -------------------------------------------------
+
+              if currently_available and not previously_available:
 
                   message = (
-                      "🚨🚨 PIXEL 10 MAY BE AVAILABLE! 🚨🚨\n\n"
+                      "🚨🚨 PIXEL 10 AVAILABLE! 🚨🚨\n\n"
                       "Open Box Google Pixel 10\n"
                       "128GB Lemongrass Unlocked\n\n"
                       "Best Buy Canada\n\n"
@@ -247,10 +283,25 @@ jobs:
 
                   telegram(message)
 
-              else:
+                  with open(state_file, "w") as f:
+                      f.write("available")
+
+              elif currently_available:
 
                   print(
-                      "Pixel 10 does not appear to be available."
+                      "Still available — notification already sent."
+                  )
+
+              else:
+
+                  # Clear the state so that a future restock
+                  # generates a new notification.
+
+                  if os.path.exists(state_file):
+                      os.remove(state_file)
+
+                  print(
+                      "Currently unavailable."
                   )
 
               browser.close()
